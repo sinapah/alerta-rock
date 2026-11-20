@@ -1,0 +1,51 @@
+summary: alerta serves the web UI and API backed by PostgreSQL
+
+execute: |
+  docker network create alerta-test
+  docker run -d --name alerta-db --network alerta-test \
+    -e POSTGRES_PASSWORD=alerta -e POSTGRES_DB=alerta postgres:16
+
+  for i in $(seq 1 30); do
+    docker exec alerta-db pg_isready -U postgres -d alerta && break
+    sleep 2
+  done
+  docker exec alerta-db pg_isready -U postgres -d alerta
+
+  docker run -d --name alerta --network alerta-test \
+    -e DATABASE_URL=postgresql://postgres:alerta@alerta-db:5432/alerta \
+    -e SECRET_KEY=spread-test-secret \
+    alerta:latest
+
+  URL=http://$(docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" alerta):8080
+
+  for i in $(seq 1 60); do
+    [ "$(curl -s "$URL"/api/management/gtg)" = "OK" ] && break
+    sleep 2
+  done
+  [ "$(curl -s "$URL"/api/management/gtg)" = "OK" ]
+
+  # web UI and its config are served by nginx
+  curl -fsS "$URL"/ | grep -q '<title>Alerta</title>'
+  curl -fsS "$URL"/config.json | grep -q '"/api"'
+
+  # server version
+  curl -fsS "$URL"/api/management/manifest | grep -q '9.1.0'
+
+  # alert round trip through nginx -> uWSGI -> PostgreSQL
+  curl -fsS -X POST -H 'Content-Type: application/json' \
+    -d '{"resource":"spread-r1","event":"spread-e1","environment":"Production","service":["Spread"],"severity":"major"}' \
+    "$URL"/api/alert | grep -q '"status": *"ok"'
+  curl -fsS "$URL"/api/alerts | grep -q 'spread-r1'
+
+  # bundled CLI talks to the server using the image's ALERTA_ENDPOINT default
+  docker exec alerta alerta version | grep -q '8.5.3'
+
+  # nginx must not fail opening log files as non-root
+  ! docker logs alerta 2>&1 | grep -qi 'permission denied'
+
+restore: |
+  docker rm -f alerta alerta-db || true
+  docker network rm alerta-test || true
+
+debug: |
+  docker logs alerta || true
