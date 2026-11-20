@@ -1,6 +1,6 @@
 # Alerta rock
 
-This repository holds a Rockcraft project that builds an OCI image (a "rock") of Alerta 9.1.0 on Ubuntu 24.04 (amd64). The rock is meant to be used by a future Juju Kubernetes charm.
+This repository holds a Rockcraft project that builds an OCI image (a "rock") of Alerta 9.1.0 on Ubuntu 26.04 (amd64). The rock is meant to be used by a future Juju Kubernetes charm.
 
 ## Contents of the rock
 
@@ -9,7 +9,7 @@ This repository holds a Rockcraft project that builds an OCI image (a "rock") of
 | `alerta-server` | 9.1.0 | git tag `v9.1.0` of https://github.com/alerta/alerta |
 | `alerta` (CLI) | 8.5.3 | PyPI |
 | `alerta-webui` | 8.7.1 | GitHub release tarball |
-| `nginx` | Ubuntu 24.04 package | apt |
+| `nginx` | Ubuntu 26.04 package | apt |
 | `uWSGI` | 2.0.31 | PyPI |
 
 The `alerta-contrib` plugins are not bundled.
