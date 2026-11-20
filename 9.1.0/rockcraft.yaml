@@ -1,0 +1,109 @@
+name: alerta
+title: Alerta
+base: ubuntu@24.04
+version: "9.1.0"
+summary: Alerta monitoring alert consolidation server with web UI
+description: |
+    Alerta consolidates alerts from many monitoring systems into a single
+    view. This rock contains the Alerta API server (alerta-server 9.1.0,
+    served by uWSGI), the Alerta web UI (8.7.1) and the Alerta command line
+    client (8.5.3), fronted by nginx on port 8080. Configuration is done
+    through environment variables.
+license: Apache-2.0
+source-code: https://github.com/alerta/alerta
+platforms:
+    amd64:
+
+run-user: _daemon_
+
+environment:
+    ALERTA_ENDPOINT: http://localhost:8080/api
+    FLASK_SKIP_DOTENV: "1"
+    PYTHONUNBUFFERED: "1"
+
+services:
+    uwsgi:
+        override: replace
+        summary: Alerta API server
+        command: /bin/uwsgi --ini /etc/alerta/uwsgi.ini
+        startup: enabled
+        user: _daemon_
+        environment:
+            DEBUG: "False"
+    nginx:
+        override: replace
+        summary: Alerta web UI and API reverse proxy
+        command: /usr/sbin/nginx -e stderr -c /etc/alerta/nginx.conf
+        startup: enabled
+        after: [uwsgi]
+        user: _daemon_
+    housekeeping:
+        override: replace
+        summary: Periodic deletion of expired and informational alerts
+        command: sh -c 'sleep 60 && exec alerta housekeeping --expired "${HK_EXPIRED_DELETE_HRS:-2}" --info "${HK_INFO_DELETE_HRS:-12}"'
+        startup: disabled
+        user: _daemon_
+    heartbeats:
+        override: replace
+        summary: Periodic alerting on stale heartbeats
+        command: sh -c 'sleep 60 && exec alerta heartbeats --alert --severity "${HEARTBEAT_SEVERITY:-major}"'
+        startup: disabled
+        user: _daemon_
+
+checks:
+    alerta-ready:
+        override: replace
+        level: ready
+        http:
+            url: http://localhost:8080/api/management/gtg
+
+parts:
+    alerta:
+        plugin: python
+        source: https://github.com/alerta/alerta.git
+        source-tag: v9.1.0
+        source-depth: 1
+        build-packages:
+            - build-essential
+            - libldap2-dev
+            - libpq-dev
+            - libsasl2-dev
+        stage-packages:
+            - ca-certificates
+            - libldap2
+            - libpq5
+            - libpython3.12t64
+            - libsasl2-2
+            - python3-venv
+            - xmlsec1
+        python-requirements:
+            - requirements.txt
+        python-packages:
+            - pip
+            - setuptools<81
+            - wheel
+            - alerta==8.5.3
+            - lxml==5.3.2
+            - pysaml2==7.2.1
+            - python-ldap==3.4.5
+            - uWSGI==2.0.31
+        override-build: |
+            craftctl default
+            install -D -m 0644 wsgi.py "${CRAFT_PART_INSTALL}/app/wsgi.py"
+
+    webui:
+        plugin: dump
+        source: https://github.com/alerta/alerta-webui/releases/download/v8.7.1/alerta-webui.tar.gz
+        source-type: tar
+        source-checksum: sha256/debde16b772e66c7bff55e9cc7bce8f86ba30e11a8fa8195a6fb3f5d1ea40009
+        organize:
+            "*": srv/alerta/web/
+
+    nginx:
+        plugin: nil
+        stage-packages:
+            - nginx
+
+    config:
+        plugin: dump
+        source: rootfs

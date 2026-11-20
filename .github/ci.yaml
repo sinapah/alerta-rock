@@ -25,7 +25,7 @@ images:
   - directory: "*"
 
   ## Example of specifying different registries for a specific rock
-  # - directory: "my-rock-name/0.1-24.04"
+  # - directory: "9.1.0"
   #   registries:
   #     - docker.io
   #     - rocksdev-ecr-public
